@@ -5,6 +5,7 @@ import Game from './src/components/Game';
 import Lobby from './src/components/Lobby';
 import shortid from 'shortid';
 import Dialog from "react-native-dialog";
+console.disableYellowBox = true;
 
 
 export default class App extends Component {
