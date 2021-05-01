@@ -1,19 +1,11 @@
-import React, { Component } from 'react';
+import React, {Component} from 'react';
 import PubNubReact from 'pubnub-react';
-import {
-  Platform,
-  StyleSheet,
-  View,
-  Alert,
-  Text,
-} from 'react-native';
-
+import {Alert, StyleSheet, Text, View,} from 'react-native';
 import Game from './src/components/Game';
 import Lobby from './src/components/Lobby';
-import shortid  from 'shortid';
-import Spinner from 'react-native-spinkit';
-import prompt from 'react-native-prompt-android';
-console.disableYellowBox = true;
+import shortid from 'shortid';
+import Dialog from "react-native-dialog";
+
 
 export default class App extends Component {
   constructor(props) {
@@ -31,7 +23,9 @@ export default class App extends Component {
       is_playing: false,
       is_waiting: false,
       is_room_creator: false,
-      isDisabled: false
+      isDisabled: false,
+      enteredLobby: '',
+      isPromptVisible: false,
     };
 
     this.channel = null;
@@ -51,7 +45,6 @@ export default class App extends Component {
     });
 
     this.pubnub.getMessage('gameLobby', (msg) => {
-      // Set username for Player X
       if(msg.message.is_room_creator){
         this.setState({
           x_username: msg.message.username
@@ -79,17 +72,14 @@ export default class App extends Component {
       Alert.alert('Error','Please enter a username');
     }
     else{
-      // Random channel name generated
       let roomId = shortid.generate();
-      let shorterRoomId = roomId.substring(0,5);
-      roomId = shorterRoomId;
+      roomId = roomId.substring(0, 5);
       this.channel = 'tictactoe--' + roomId;
       this.pubnub.subscribe({
         channels: [this.channel],
         withPresence: true
       });
 
-      // alert the room creator to share the room ID with their friend
       Alert.alert(
         'Share this room ID with your friend',
         roomId,
@@ -99,7 +89,6 @@ export default class App extends Component {
         { cancelable: false }
       );
 
-      // show the Spinner component while waiting for someone to join the room
       this.setState({
         piece: 'X',
         is_room_creator: true,
@@ -119,12 +108,9 @@ export default class App extends Component {
 
   joinRoom = (room_id) => {
     this.channel = 'tictactoe--' + room_id;
-
-    // Check that the lobby is not full
     this.pubnub.hereNow({
       channels: [this.channel],
     }).then((response) => {
-      // If totalOccupancy is less than or equal to 1, then player can't join a room since it has not been created
       if(response.totalOccupancy <= 1){
         Alert.alert('Lobby is empty','Please create a room or wait for someone to create a room to join.');
       }
@@ -156,44 +142,15 @@ export default class App extends Component {
   }
 
   onPressJoinRoom = () => {
-    if(this.state.username === ''){
-      Alert.alert('Error','Please enter a username');
-    }
-    else{
-      // Check for platform
-      if (Platform.OS === "android") {
-        prompt(
-          'Enter the room name',
-          '',
-          [
-           {text: 'Cancel', onPress: () => console.log('Cancel Pressed'), style: 'cancel'},
-           {text: 'OK', onPress: (value) =>
-           (value === '') ? '' : this.joinRoom(value)},
-          ],
-          {
-              type: 'default',
-              cancelable: false,
-              defaultValue: '',
-              placeholder: ''
-            }
-        );
-      }
-      else{
-        Alert.prompt(
-          'Enter the room name',
-          '',
-          [
-           {text: 'Cancel', onPress: () => console.log('Cancel Pressed'), style: 'cancel'},
-           {text: 'OK', onPress: (value) =>
-           (value === '') ? '' : this.joinRoom(value)},
-          ],
-          'plain-text',
-        );
-      }
+    if (this.state.username === '') {
+      Alert.alert('Error', 'Please enter a username');
+    } else {
+      this.setState({
+        isPromptVisible: true,
+      })
     }
   }
 
-  // Reset everything
   endGame = () => {
     this.setState({
       username: '',
@@ -206,7 +163,6 @@ export default class App extends Component {
       isDisabled: false
     });
 
-    // Subscribe to gameLobby again on a new game
     this.channel = null;
     this.pubnub.subscribe({
       channels: ['gameLobby'],
@@ -216,30 +172,46 @@ export default class App extends Component {
 
   render() {
     return (
-      <View style={styles.container}>
-        <View style={styles.title_container}>
-          <Text style={styles.title}>RN Tic-Tac-Toe</Text>
-        </View>
-        {
-          !this.state.is_playing &&
-          <Lobby
-            username={this.state.name}
-            onChangeUsername={this.onChangeUsername}
-            onPressCreateRoom={this.onPressCreateRoom}
-            onPressJoinRoom={this.onPressJoinRoom}
-            isDisabled={this.state.isDisabled}
-          />
-        }
+        <View style={styles.container}>
+          <View style={styles.title_container}>
+            <Text style={styles.title}>RN Tic-Tac-Toe</Text>
+          </View>
+          {!!this.state.isPromptVisible &&
+          <View>
+            <Dialog.Container visible={true}>
+              <Dialog.Title>Enter the room name</Dialog.Title>
+              <Dialog.Input onChangeText={(value) => this.setState({
+                enteredLobby: value
+              })}/>
+              <Dialog.Button label="Cancel" onPress={() => this.setState({
+                isPromptVisible: false,
+              })}/>
+              <Dialog.Button label="OK" onPress={() =>
+                  (this.state.enteredLobby === '') ? '' : (this.joinRoom(this.state.enteredLobby) && this.setState({
+                    isPromptVisible: false,
+                  }))}/>
+            </Dialog.Container>
+          </View>}
+          {
+            !this.state.is_playing &&
+            <Lobby
+                username={this.state.name}
+                onChangeUsername={this.onChangeUsername}
+                onPressCreateRoom={this.onPressCreateRoom}
+                onPressJoinRoom={this.onPressJoinRoom}
+                isDisabled={this.state.isDisabled}
+            />
+          }
 
-        {
+          {
             this.state.is_playing &&
             <Game
-              pubnub={this.pubnub}
-              channel={this.channel}
-              username={this.state.username}
-              piece={this.state.piece}
-              x_username={this.state.x_username}
-              o_username={this.state.o_username}
+                pubnub={this.pubnub}
+                channel={this.channel}
+                username={this.state.username}
+                piece={this.state.piece}
+                x_username={this.state.x_username}
+                o_username={this.state.o_username}
               is_room_creator={this.state.is_room_creator}
               endGame={this.endGame}
             />
