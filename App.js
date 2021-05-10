@@ -111,35 +111,33 @@ export default class App extends Component {
     this.channel = 'tictactoe--' + room_id;
     this.pubnub.hereNow({
       channels: [this.channel],
-    }).then((response) => {
-      if(response.totalOccupancy <= 1){
-        Alert.alert('Lobby is empty','Please create a room or wait for someone to create a room to join.');
-      }
-      else if(response.totalOccupancy === 2){
-        this.pubnub.subscribe({
-          channels: [this.channel],
-          withPresence: true
-        });
+    })
+        .then((response) => {
+          if (response.totalOccupancy < 2) {
+            this.pubnub.subscribe({
+              channels: [this.channel],
+              withPresence: true
+            });
 
-        this.setState({
-          piece: 'O',
-        });
+            this.pubnub.publish({
+              message: {
+                readyToPlay: true,
+                not_room_creator: true,
+                username: this.state.username
+              },
+              channel: 'gameLobby'
+            });
 
-        this.pubnub.publish({
-          message: {
-            readyToPlay: true,
-            not_room_creator: true,
-            username: this.state.username
-          },
-          channel: 'gameLobby'
+            this.setState({
+              piece: 'O',
+            });
+          } else {
+            console.log('lobby full');
+          }
+        })
+        .catch((error) => {
+          console.log(error);
         });
-      }
-      else{
-        Alert.alert('Room full','Please enter another room name');
-      }
-    }).catch((error) => {
-        console.log(error)
-    });
   }
 
   onPressJoinRoom = () => {
